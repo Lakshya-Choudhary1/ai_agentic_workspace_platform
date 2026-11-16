@@ -1,0 +1,137 @@
+
+// use prisma-8
+
+// Defines the lifecycle stages of a workspace.
+enum WorkspaceStatus {
+  PLANNING      // Workspace created, work not started.
+  IN_PROGRESS  // Work is currently in progress.
+  IN_REVIEW    // Work is waiting for review.
+  DONE         // Workspace completed.
+}
+
+// Stores users synchronized with Clerk authentication.
+model User {
+  id        String   @id @default(cuid()) // Unique database user ID.
+  clerkId   String   @unique // Unique user ID from Clerk.
+  email     String   @unique // User's email address.
+  name      String?  // Optional display name.
+  imageUrl  String?  // Optional profile image URL.
+  createdAt DateTime @default(now()) // Account creation time.
+  updatedAt DateTime @updatedAt // Automatically updated timestamp.
+
+  // One user can create multiple workspaces.
+  createdWorkspaces Workspace[]
+
+  // One user can create multiple AI agent prompts.
+  agentPrompts AgentPrompt[]
+}
+
+// Represents an individual project or collaborative workspace.
+model Workspace {
+  id          String          @id @default(cuid()) // Unique workspace ID.
+  name        String // Workspace name.
+  description String? // Optional workspace description.
+
+  creatorId  String // Foreign key referencing the workspace creator.
+  clerkOrgId String? // Optional Clerk organization ID for team workspaces.
+
+  status WorkspaceStatus @default(PLANNING) // Current workspace status.
+  position Float @default(0) // Used to determine workspace display order.
+
+  shareToken String? @unique // Unique token for sharing workspace access.
+
+  // One-to-one: A workspace can have one document.
+  doc Docs?
+
+  // One-to-one: A workspace can have one canvas.
+  canvas Canvas?
+
+  // One-to-many: A workspace can contain multiple agent prompts.
+  agentPrompts AgentPrompt[]
+
+  // Many-to-one: Every workspace belongs to one creator.
+  author User @relation(
+    fields: [creatorId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  createdAt DateTime @default(now()) // Workspace creation timestamp.
+  updatedAt DateTime @updatedAt // Last modification timestamp.
+
+  // Optimizes queries involving creation date and organization ID.
+  @@index([createdAt, clerkOrgId])
+}
+
+// Stores document content and collaborative editing state.
+model Docs {
+  id String @id @default(cuid()) // Unique document ID.
+
+  // Unique foreign key ensures one document per workspace.
+  workspaceId String @unique
+
+  content Json? // TipTap document content stored as JSON.
+  yjsState Bytes? // Serialized Yjs binary state for collaboration.
+
+  // One-to-one: Connects this document to its workspace.
+  // Deleting the workspace also deletes this document.
+  workspace Workspace @relation(
+    fields: [workspaceId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  createdAt DateTime @default(now()) // Document creation timestamp.
+  updatedAt DateTime @updatedAt // Last document update timestamp.
+}
+
+// Stores workspace canvas data (nodes, edges, positions, etc.).
+model Canvas {
+  id String @id @default(cuid()) // Unique canvas ID.
+
+  // Unique foreign key ensures one canvas per workspace.
+  workspaceId String @unique
+
+  content Json? // Stores canvas elements and their properties.
+
+  // One-to-one: Connects this canvas to its workspace.
+  // Deleting the workspace also deletes its canvas.
+  workspace Workspace @relation(
+    fields: [workspaceId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  createdAt DateTime @default(now()) // Canvas creation timestamp.
+  updatedAt DateTime @updatedAt // Last canvas update timestamp.
+}
+
+// Stores reusable AI prompts created by users.
+model AgentPrompt {
+  id String @id @default(cuid()) // Unique prompt ID.
+
+  ownerId String // Owner identifier, e.g. Clerk organization ID.
+  userId String // Foreign key referencing the prompt creator.
+  workspaceId String? // Optional workspace association.
+
+  // Many-to-one: Each prompt belongs to one user.
+  // Deleting the user deletes their prompts.
+  user User @relation(
+    fields: [userId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  // Many-to-one: A prompt can belong to one workspace.
+  // Deleting the workspace keeps the prompt but removes its association.
+  workspace Workspace? @relation(
+    fields: [workspaceId],
+    references: [id],
+    onDelete: SetNull
+  )
+
+  createdAt DateTime @default(now()) // Prompt creation timestamp.
+
+  // Optimizes retrieving prompts by owner and creation date.
+  @@index([ownerId, createdAt])
+}

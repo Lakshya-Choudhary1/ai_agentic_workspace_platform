@@ -1,7 +1,7 @@
 "use client"
 
-import { usePathname } from "next/navigation"
-import SiteHeader from "@/components/SiteHeader"
+import { usePathname } from "next/navigation";
+import SiteHeader from "@/components/SiteHeader";
 
 
 
@@ -18,7 +18,7 @@ const AppShell = ({children} : AppShellProps) => {
      if(isFullScreenRoute) return <>{children}</>;
 
   return (
-    <div>
+    <div className="overflow">
      <SiteHeader/>
      {children}
     </div>
